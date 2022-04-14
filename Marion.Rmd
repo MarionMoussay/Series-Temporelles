@@ -1,0 +1,38 @@
+---
+title: "Marion"
+output: html_document
+date: '2022-04-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+library(zoo)
+library(xts)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+data <- read.csv("hungary_chickenpox.csv")
+summary(data)
+#On choisit BUDAPEST pcq capital 
+
+data <- data[,1:2]
+data$Date <- dmy(data$Date)
+plot(data, type='l') 
+
+```
+On imagine un modèle additif pcq on voit une amplitude plutot constante
+```{r}
+hist(data$BUDAPEST, breaks=15, probability = TRUE, main = "Distribution des cas de varicelles à Budapest", xlab = "Nombre de cas de varicelles", col='cyan4')
+curve(dnorm(x, mean=mean(data$BUDAPEST), sd=sd(data$BUDAPEST)), col="red", lwd=3, lty=2, add=TRUE, yaxt="n")
+lines(density(data$BUDAPEST), lwd = 3, col = "purple")
+legend(x= 'topright',legend=c("densité de la distribution", "densité d'une gaussienne"),
+       col=c("purple", "red"), lty=1:2, cex=0.8,
+       title="Types de ligne", text.font=4, bg='lightblue')
+
+```
+
