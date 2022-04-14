@@ -1,0 +1,1 @@
+hungary_chickenpox <- read.csv("hungary_chickenpox.csv")
