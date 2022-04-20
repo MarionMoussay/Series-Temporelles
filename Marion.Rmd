@@ -15,24 +15,123 @@ library(xts)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
-
-data <- read.csv("hungary_chickenpox.csv")
-summary(data)
-#On choisit BUDAPEST pcq capital 
-
-data <- data[,1:2]
-data$Date <- dmy(data$Date)
-plot(data, type='l') 
-
+library(forecast)
 ```
-On imagine un modèle additif pcq on voit une amplitude plutot constante
+
+# Introduction, découverte des données et premières idées
+
 ```{r}
-hist(data$BUDAPEST, breaks=15, probability = TRUE, main = "Distribution des cas de varicelles à Budapest", xlab = "Nombre de cas de varicelles", col='cyan4')
-curve(dnorm(x, mean=mean(data$BUDAPEST), sd=sd(data$BUDAPEST)), col="red", lwd=3, lty=2, add=TRUE, yaxt="n")
-lines(density(data$BUDAPEST), lwd = 3, col = "purple")
-legend(x= 'topright',legend=c("densité de la distribution", "densité d'une gaussienne"),
-       col=c("purple", "red"), lty=1:2, cex=0.8,
-       title="Types de ligne", text.font=4, bg='lightblue')
+data <- read.csv("hungary_chickenpox.csv")
+data$Date <- dmy(data$Date)
+mean(colMeans(data[-1])) # Moyenne générale de cas de varicelle de 38.84282
+colMeans(data[-1]) # Budapest bien supérieure à la moyenne, top 1 (logique car capitale)
+```
+
+## Choix de la ville
+
+```{r}
+#On choisit BUDAPEST
+budapest <- data[,1:2]
+colnames(budapest) <- c("date", "nb")
+budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 ```
+De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, il on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
+
+## Première approche
+
+```{r}
+budapest %>% select(nb) %>% 
+  ggtsdisplay(
+    plot.type = "scatter", 
+    lag.max=100
+    )
+```
+La fonction d'autocorrélation est périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
+
+Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le quotient des covariances empiriques par la variance empirique. Plus le nuage de points est arrondis plus l'auto-corrélation est proche de 1. Ici on ne distingue rien de "remarquable".
+
+Focus sur l'auto-corrélation : 
+```{r}
+acf(budapest$nb, lag.max = 50)
+```
+
+On voit ici que la périodicité est de 25 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique sur 12 jours, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+```{r}
+pacf(budapest$nb, lag.max = 100)
+```
+On voit bien que l'auto-corrélation atteint les mêmes valeurs, il n'y a donc pas d'effet résiduel. 
+
+On regarde l'évolution tout les 25 jours sur l'année : 
+
+```{r}
+v=c()
+for (i in 1:522){
+  cp<-window(budapest$nb,start=c(i,1),end=c(i,25))
+  v=c(v,sum(cp))
+}
+data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("Nombre de cas sur 25 jours de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
+
+
+```
+On ne décèle pas de tendance évidente si ce n'est qu'une décroissance vers la fin de la série.
+
+## Décomposition de la série 
+
+```{r}
+temp.ts <- ts(budapest$nb, start=c(2005,1,3), frequency=7)
+mod_stl_add <- stl(temp.ts, s.window = "periodic")
+
+budapest_decomp <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
+
+budapest_decomp %>% ggplot() + 
+  geom_line(aes(x = date, y=nb, color="Xt")) +
+  geom_line(aes(x=date, y=trend+seasonal, color="mt+st")) + geom_line(aes(x=date, y=trend, color="mt")) +
+  scale_color_manual(values = c("red", "purple", "black")) +
+  theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
+  labs(colour = "Modele") + ggtitle("Modèle additif") +
+  xlab("Date") + ylab("Nombre de cas") + theme_minimal()
+```
+On voit bien ici qu'il y a une saisonnalité mais aucune tendance, on va alors supprimer cette première.
+
+# Elimination de la saisonnalité
+
+##Methode avec opérateur différence 
+```{r}
+T=7
+x1=diff(budapest$nb,lag=T,difference=1)
+x2=diff(budapest$nb,lag=T,difference=2)
+x3=diff(budapest$nb,lag=T,difference=3)
+print(mean(x1))
+print(mean(x2))
+print(mean(x3))
+# mean(x2) et mean(x3) sont du même ordre donc on en déduit que x2 est de moyenne nulle, donc la tendance est un polynôme d'ordre 1 et que la période est 7 (on peut aussi regarder les graphiques pour s'en convaincre)
+plot(x1, type='l')
+plot(x2, type='l')
+plot(x3, type='l')
+
+Box.test(x1,lag=20)
+#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on garde l'hypothèse "bruit blanc".
+acf(x1,lag.max=40,type=c("correlation"))
+```
+
+## Fonction *decompose* : moyennes mobiles
+
+```{r}
+budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=7)
+budapest_dec <- decompose(budapest.ts, type = "additive")
+
+plot(budapest_dec)
+
+#Effectuons un test de niveau 0,95
+Box.test(budapest_dec$random,lag=20)
+#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on garde l'hypothèse "bruit blanc".
+acf(budapest_dec$x,lag.max=40,type=c("correlation"))
+```
+Je garderais la fonction décompose où les résultats sont plus parlants (je trouve) et mettrais le diff en annexe.
+
+
+
+
+
 
