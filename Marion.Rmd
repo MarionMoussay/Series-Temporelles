@@ -53,21 +53,21 @@ Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le qu
 
 Focus sur l'auto-corrélation : 
 ```{r}
-acf(budapest$nb, lag.max = 50)
+acf(budapest$nb, lag.max = 60)
 ```
 
-On voit ici que la périodicité est de 25 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique sur 12 jours, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+On voit ici que la périodicité est de 52 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique sur 12 jours, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
 ```{r}
 pacf(budapest$nb, lag.max = 100)
 ```
 On voit bien que l'auto-corrélation atteint les mêmes valeurs, il n'y a donc pas d'effet résiduel. 
 
-On regarde l'évolution tout les 25 jours sur l'année : 
+On regarde l'évolution tout les 52 jours sur l'année : 
 
 ```{r}
 v=c()
 for (i in 1:522){
-  cp<-window(budapest$nb,start=c(i,1),end=c(i,25))
+  cp<-window(budapest$nb,start=c(i,1),end=c(i,52))
   v=c(v,sum(cp))
 }
 data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("Nombre de cas sur 25 jours de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
@@ -79,7 +79,7 @@ On ne décèle pas de tendance évidente si ce n'est qu'une décroissance vers l
 ## Décomposition de la série 
 
 ```{r}
-temp.ts <- ts(budapest$nb, start=c(2005,1,3), frequency=7)
+temp.ts <- ts(budapest$nb, start=c(2005,1,3), frequency=52)
 mod_stl_add <- stl(temp.ts, s.window = "periodic")
 
 budapest_decomp <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
@@ -90,15 +90,15 @@ budapest_decomp %>% ggplot() +
   scale_color_manual(values = c("red", "purple", "black")) +
   theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
   labs(colour = "Modele") + ggtitle("Modèle additif") +
-  xlab("Date") + ylab("Nombre de cas") + theme_minimal()
+  xlab("Années") + ylab("Nombre de cas de varicelles") + theme_minimal()
 ```
-On voit bien ici qu'il y a une saisonnalité mais aucune tendance, on va alors supprimer cette première.
+
 
 # Elimination de la saisonnalité
 
 ##Methode avec opérateur différence 
 ```{r}
-T=7
+T=52
 x1=diff(budapest$nb,lag=T,difference=1)
 x2=diff(budapest$nb,lag=T,difference=2)
 x3=diff(budapest$nb,lag=T,difference=3)
@@ -118,7 +118,7 @@ acf(x1,lag.max=40,type=c("correlation"))
 ## Fonction *decompose* : moyennes mobiles
 
 ```{r}
-budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=7)
+budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=52)
 budapest_dec <- decompose(budapest.ts, type = "additive")
 
 plot(budapest_dec)
@@ -128,7 +128,7 @@ Box.test(budapest_dec$random,lag=20)
 #On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on garde l'hypothèse "bruit blanc".
 acf(budapest_dec$x,lag.max=40,type=c("correlation"))
 ```
-Je garderais la fonction décompose où les résultats sont plus parlants (je trouve) et mettrais le diff en annexe.
+
 
 
 
