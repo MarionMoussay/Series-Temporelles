@@ -1,6 +1,10 @@
 ---
-title: "Marion"
-output: html_document
+title: "Séries temporelles"
+authors : "Justine Louarn - Lucie Rimbault - Marion Moussay"
+output:
+  pdf_document: 
+    toc: true
+  html_document: default
 date: '2022-04-14'
 ---
 
@@ -8,14 +12,15 @@ date: '2022-04-14'
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-```{r}
+
+```{r message=FALSE, warning=FALSE}
 library(zoo)
 library(xts)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
 library(forecast)
+library(gridExtra)
 ```
 
 # Introduction, découverte des données et premières idées
@@ -36,7 +41,7 @@ colnames(budapest) <- c("date", "nb")
 budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 ```
-De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, il on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
+De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
 
 ## Première approche
 
@@ -56,7 +61,7 @@ Focus sur l'auto-corrélation :
 acf(budapest$nb, lag.max = 60)
 ```
 
-On voit ici que la périodicité est de 52 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique sur 12 jours, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+On voit ici que la périodicité est de 52 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
 ```{r}
 pacf(budapest$nb, lag.max = 100)
 ```
@@ -64,13 +69,13 @@ On voit bien que l'auto-corrélation atteint les mêmes valeurs, il n'y a donc p
 
 On regarde l'évolution tout les 52 jours sur l'année : 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 v=c()
 for (i in 1:522){
   cp<-window(budapest$nb,start=c(i,1),end=c(i,52))
   v=c(v,sum(cp))
 }
-data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("Nombre de cas sur 25 jours de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
+data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("Nombre de cas sur 52 jours de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 
 ```
@@ -96,7 +101,7 @@ budapest_decomp %>% ggplot() +
 
 # Elimination de la saisonnalité
 
-##Methode avec opérateur différence 
+## Methode avec opérateur différence 
 ```{r}
 T=52
 x1=diff(budapest$nb,lag=T,difference=1)
@@ -122,12 +127,34 @@ budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=
 budapest_dec <- decompose(budapest.ts, type = "additive")
 
 plot(budapest_dec)
+```
 
+## Test sur les résidus
+```{r}
 #Effectuons un test de niveau 0,95
 Box.test(budapest_dec$random,lag=20)
-#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on garde l'hypothèse "bruit blanc".
-acf(budapest_dec$x,lag.max=40,type=c("correlation"))
 ```
+La p-valeur est supérieure au seuil de signification, on peut alors conclure que les valeurs résiduelles sont indépendantes et donc décorrélées.
+
+```{r}
+plot(budapest_dec$random)
+```
+
+Le résidus semblent bien centrés en 0. Ainsi on peut dire qu'il s'agit de bruits blanc, ils sont centrés et décorrélées.
+```{r}
+p1 <- gglagplot(budapest_dec$random, do.lines = FALSE, set.lags = 1:12, colour = FALSE)
+p2 <- ggAcf(budapest_dec$random, lag.max = 20) + ggtitle(" ")
+p3 <- ggPacf(budapest_dec$random, lag.max = 20) +  ggtitle(" ")
+
+grid.arrange(top = "Etude des résidus", p2,p3, p1, layout_matrix = rbind(c(1,3),c(2,3)))
+```
+Le lag-plot nous laisse penser que l'auto-corrélation est proche de 1 pcq nuage arrondi PACF ACF ?
+
+# Modélisation de la série 
+
+Choix modèles ArR(p) ou MA(q) ou ARMA(p,q) ?
+
+# Modèle retenu
 
 
 
