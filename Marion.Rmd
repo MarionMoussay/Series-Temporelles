@@ -36,7 +36,7 @@ colnames(budapest) <- c("date", "nb")
 budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 ```
-De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, il on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
+De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
 
 ## Première approche
 
