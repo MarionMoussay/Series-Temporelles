@@ -2,21 +2,21 @@
 title: "Projet"
 author: "Justine LOUARN - Lucie Raimbault - Marion Moussay"
 date: "4/29/2022"
-output: html_document
+output: 
+  pdf_document:
+    toc : true
 ---
 
 # Introduction 
 
+La varicelle est une maladie infantile extrêmenment contagieuse, elle est responsable d'une éruption de boutons. Elle guérit en une dizaine de jours. Dans cette étude nous allons nous intéresser au nombre de cas hebdomadaires de varicelle en Hongrie de 2005 à 2015. Nous avons choisis de nous interesser seulement à la ville de Budapest, capitale et plus grande ville de Hongrie (1 752 286 habitants).
 
+Dans ce projet nous avons pour objectif de déployer les outils vus en cours pour essayer d'ajuster un modèle aux données.
 
-
-
-
-
-
+Dans un premier temps nous allons analyser notre série brutes puis nous allons déceller ou non une saisonnalité et une tendance, puis nous étudierons les résidus afin de créer un modèle qui s'ajuste à nos données.
 
 ## Importation en package
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(zoo)
 library(xts)
 library(ggplot2)
@@ -29,15 +29,10 @@ library(gridExtra)
 ## Importation des données 
 
 ```{r}
-
-
-
 data <- read.csv("hungary_chickenpox.csv")
 data$Date <- dmy(data$Date)
 mean(colMeans(data[-1])) # Moyenne générale de cas de varicelle de 38.84282
 colMeans(data[-1]) # Budapest bien supérieure à la moyenne, top 1 (logique car capitale)
-
-
 ```
 ```{r}
 budapest <- data[,1:2]
@@ -45,7 +40,11 @@ colnames(budapest) <- c("date", "nb")
 budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 ```
-
+```{r}
+boxplot(budapest$nb)
+```
+Sur le boxplot des données hebdomadaires de varicelles à Budapest, on observe qu'il y a des données hautes, après vérification on ne les considère pas comme abbérantes. Les données étant très propre, nous n'avons pas eu de modifications à faire sur le jeu de données. 
+De cette première représentation, nous remarquons directement une forte saisonnalité d'un an, soit 52 semaines dans notres cas. Nous n'observons pas vraiment de tendance ou alors une légère décroissance mais cela reste difficile à dire avec ce graphique. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante.
 
 
 ## Première approche
@@ -57,9 +56,7 @@ budapest %>% select(nb) %>%
     lag.max=100
     )
 ```
-
-
-La fonction d'autocorrélation est périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
+Pour mieux déterminer la saisonnalité nous allons observer la fonction d'autocorrélation. Elle semble périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
 
 Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le quotient des covariances empiriques par la variance empirique. Plus le nuage de points est arrondis plus l'auto-corrélation est proche de 1. Ici on ne distingue rien de "remarquable".
 
@@ -175,12 +172,9 @@ donnee %>% ggplot() +
 
 donnee %>% ggplot() + aes(x=date, remainder) + geom_line() +  xlab("") + ylab("") + ggtitle("Résidus du modèle")
 
-
-
-
 ```
 
-## DETECTION MA(q), AR(p) ?
+# DETECTION MA(q), AR(p) ?
 
 ```{r}
 arima <- auto.arima(donnee$remainder)
