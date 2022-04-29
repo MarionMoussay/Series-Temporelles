@@ -30,6 +30,8 @@ data <- read.csv("hungary_chickenpox.csv")
 data$Date <- dmy(data$Date)
 mean(colMeans(data[-1])) # Moyenne générale de cas de varicelle de 38.84282
 colMeans(data[-1]) # Budapest bien supérieure à la moyenne, top 1 (logique car capitale)
+
+
 ```
 
 ## Choix de la ville
@@ -41,7 +43,9 @@ colnames(budapest) <- c("date", "nb")
 budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
 
 ```
-De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante. 
+De cette première représentation, on ne voit pas de tendance, ou alors une légère décroissance. En revanche, on remarque bien une saisonnalité. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante.
+
+
 
 ## Première approche
 
@@ -57,11 +61,16 @@ La fonction d'autocorrélation est périodique, ce qui indique une périodicité
 Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le quotient des covariances empiriques par la variance empirique. Plus le nuage de points est arrondis plus l'auto-corrélation est proche de 1. Ici on ne distingue rien de "remarquable".
 
 Focus sur l'auto-corrélation : 
+
 ```{r}
 acf(budapest$nb, lag.max = 60)
 ```
 
-On voit ici que la périodicité est de 52 jours. Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+On voit ici que la périodicité est de 52 semaines. En effet chaque donnée est espacée de 7 jours. **T= 52** semaines donc environ 12 mois, soit 1 an.
+
+Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+
+
 ```{r}
 pacf(budapest$nb, lag.max = 100)
 ```
@@ -80,6 +89,8 @@ data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("N
 
 ```
 On ne décèle pas de tendance évidente si ce n'est qu'une décroissance vers la fin de la série.
+
+
 
 ## Décomposition de la série 
 
@@ -104,9 +115,14 @@ budapest_decomp %>% ggplot() +
 ## Methode avec opérateur différence 
 ```{r}
 T=52
-x1=diff(budapest$nb,lag=T,difference=1)
-x2=diff(budapest$nb,lag=T,difference=2)
-x3=diff(budapest$nb,lag=T,difference=3)
+#x1=diff(budapest$nb,lag=T,difference=1)
+#x2=diff(budapest$nb,lag=T,difference=2)
+#x3=diff(budapest$nb,lag=T,difference=3)
+
+x1= diff(diff(budapest$nb, lag = T), differences = 1)
+x2=diff(diff(budapest$nb, lag = T), differences = 2)
+x3=diff(diff(budapest$nb, lag = T), differences = 3)
+
 print(mean(x1))
 print(mean(x2))
 print(mean(x3))
@@ -115,9 +131,9 @@ plot(x1, type='l')
 plot(x2, type='l')
 plot(x3, type='l')
 
-Box.test(x1,lag=20)
-#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on garde l'hypothèse "bruit blanc".
-acf(x1,lag.max=40,type=c("correlation"))
+Box.test(x1,lag=52)
+#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on rejette l'hypothèse "bruit blanc".
+acf(x1,lag.max=52,type=c("correlation"))
 ```
 
 ## Fonction *decompose* : moyennes mobiles
@@ -132,19 +148,21 @@ plot(budapest_dec)
 ## Test sur les résidus
 ```{r}
 #Effectuons un test de niveau 0,95
-Box.test(budapest_dec$random,lag=20)
+Box.test(budapest_dec$random,lag=52)
 ```
-La p-valeur est supérieure au seuil de signification, on peut alors conclure que les valeurs résiduelles sont indépendantes et donc décorrélées.
+La p-valeur est inferieure au seuil de significativité, on peut alors conclure que les valeurs résiduelles ne sont pas indépendantes et donc aps  décorrélées.
 
 ```{r}
 plot(budapest_dec$random)
 ```
 
 Le résidus semblent bien centrés en 0. Ainsi on peut dire qu'il s'agit de bruits blanc, ils sont centrés et décorrélées.
+
+
 ```{r}
 p1 <- gglagplot(budapest_dec$random, do.lines = FALSE, set.lags = 1:12, colour = FALSE)
-p2 <- ggAcf(budapest_dec$random, lag.max = 20) + ggtitle(" ")
-p3 <- ggPacf(budapest_dec$random, lag.max = 20) +  ggtitle(" ")
+p2 <- ggAcf(budapest_dec$random, lag.max = 60) + ggtitle(" ")
+p3 <- ggPacf(budapest_dec$random, lag.max = 60) +  ggtitle(" ")
 
 grid.arrange(top = "Etude des résidus", p2,p3, p1, layout_matrix = rbind(c(1,3),c(2,3)))
 ```
@@ -154,7 +172,18 @@ Le lag-plot nous laisse penser que l'auto-corrélation est proche de 1 pcq nuage
 
 Choix modèles ArR(p) ou MA(q) ou ARMA(p,q) ?
 
+
+
+
+Au vu de l'ACF
+
 # Modèle retenu
+
+
+
+
+
+
 
 
 
