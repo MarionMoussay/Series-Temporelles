@@ -115,9 +115,9 @@ budapest_decomp %>% ggplot() +
 ## Methode avec opérateur différence 
 ```{r}
 T=52
-#x1=diff(budapest$nb,lag=T,difference=1)
-#x2=diff(budapest$nb,lag=T,difference=2)
-#x3=diff(budapest$nb,lag=T,difference=3)
+# x1=diff(budapest$nb,lag=T,difference=1)
+# x2=diff(budapest$nb,lag=T,difference=2)
+# x3=diff(budapest$nb,lag=T,difference=3)
 
 x1= diff(diff(budapest$nb, lag = T), differences = 1)
 x2=diff(diff(budapest$nb, lag = T), differences = 2)
@@ -134,6 +134,8 @@ plot(x3, type='l')
 Box.test(x1,lag=52)
 #On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on rejette l'hypothèse "bruit blanc".
 acf(x1,lag.max=52,type=c("correlation"))
+
+
 ```
 
 ## Fonction *decompose* : moyennes mobiles
@@ -173,12 +175,25 @@ Le lag-plot nous laisse penser que l'auto-corrélation est proche de 1 pcq nuage
 Choix modèles ArR(p) ou MA(q) ou ARMA(p,q) ?
 
 
-
+Ar(6)
+MA(3)
 
 Au vu de l'ACF
 
 # Modèle retenu
 
+```{r}
+(fit <- Arima(budapest_dec$random, order=c(6,3,1)))
+(fit <- Arima(budapest_dec$random, order=c(6,3,0)))
+(fit <- Arima(budapest_dec$random, order=c(6,2,1)))
+```
+
+
+```{r}
+(fit <- Arima(budapest_dec$random, order=c(6,3,1)))
+checkresiduals(fit)
+autoplot(forecast(fit))
+```
 
 
 
