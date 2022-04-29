@@ -1,0 +1,227 @@
+---
+title: "Projet"
+author: "Justine LOUARN - Lucie Raimbault - Marion Moussay"
+date: "4/29/2022"
+output: html_document
+---
+
+# Introduction 
+
+
+
+
+
+
+
+
+
+## Importation en package
+```{r}
+library(zoo)
+library(xts)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(forecast)
+library(gridExtra)
+```
+
+## Importation des données 
+
+```{r}
+
+
+
+data <- read.csv("hungary_chickenpox.csv")
+data$Date <- dmy(data$Date)
+mean(colMeans(data[-1])) # Moyenne générale de cas de varicelle de 38.84282
+colMeans(data[-1]) # Budapest bien supérieure à la moyenne, top 1 (logique car capitale)
+
+
+```
+```{r}
+budapest <- data[,1:2]
+colnames(budapest) <- c("date", "nb")
+budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
+
+```
+
+
+
+## Première approche
+
+```{r}
+budapest %>% select(nb) %>% 
+  ggtsdisplay(
+    plot.type = "scatter", 
+    lag.max=100
+    )
+```
+
+
+La fonction d'autocorrélation est périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
+
+Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le quotient des covariances empiriques par la variance empirique. Plus le nuage de points est arrondis plus l'auto-corrélation est proche de 1. Ici on ne distingue rien de "remarquable".
+
+Focus sur l'auto-corrélation : 
+
+```{r}
+
+acf(budapest$nb, lag.max = 60)
+
+```
+
+
+On voit ici que la périodicité est de 52 semaines. En effet chaque donnée est espacée de 7 jours. **T= 52** semaines donc environ 12 mois, soit 1 an.
+
+Le corrélogramme indique donc des fortes autocorrélations qui se répètent de manière périodique, vérifions qu'il ne s'agit pas d'un effet résiduel avec la fonction *pacf* qui mesure l'autocorrélation partielle. Elle permet de mesurer l'autocorrélation d'un signal pour un décalage k "indépendamment" des autocorrélations pour les décalages inférieurs.
+
+```{r}
+pacf(budapest$nb, lag.max = 100)
+```
+On voit bien que l'auto-corrélation atteint les mêmes valeurs, il n'y a donc pas d'effet résiduel. 
+
+On regarde l'évolution tout les 52 jours sur l'année : 
+
+```{r message=FALSE, warning=FALSE}
+v=c()
+for (i in 1:522){
+  cp<-window(budapest$nb,start=c(i,1),end=c(i,52))
+  v=c(v,sum(cp))
+}
+data.frame(x=1:522, y=v) %>% ggplot() + aes(x=x, y=y) + geom_line() + ggtitle("Nombre de cas sur 52 jours de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
+
+
+```
+
+
+
+On ne décèle pas de tendance évidente si ce n'est qu'une décroissance vers la fin de la série.
+
+
+
+## Décomposition de la série 
+
+```{r}
+temp.ts <- ts(budapest$nb, start=c(2005,1,3), frequency=52)
+mod_stl_add <- stl(temp.ts, s.window = "periodic")
+
+budapest_decomp <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
+
+budapest_decomp %>% ggplot() + 
+  geom_line(aes(x = date, y=nb, color="Xt")) +
+  geom_line(aes(x=date, y=trend+seasonal, color="mt+st")) + geom_line(aes(x=date, y=trend, color="mt")) +
+  scale_color_manual(values = c("red", "purple", "black")) +
+  theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
+  labs(colour = "Modele") + ggtitle("Modèle additif") +
+  xlab("Années") + ylab("Nombre de cas de varicelles") + theme_minimal()
+```
+
+
+# Elimination de la saisonnalité
+
+## Methode avec opérateur différence 
+```{r}
+
+T=52
+
+x1= diff(diff(budapest$nb, lag = T), differences = 1)
+x2=diff(diff(budapest$nb, lag = T), differences = 2)
+x3=diff(diff(budapest$nb, lag = T), differences = 3)
+
+print(mean(x1))
+print(mean(x2))
+print(mean(x3))
+# mean(x2) et mean(x3) sont du même ordre donc on en déduit que x2 est de moyenne nulle, donc la tendance est un polynôme d'ordre 1 et que la période est 7 (on peut aussi regarder les graphiques pour s'en convaincre)
+plot(x1, type='l')
+plot(x2, type='l')
+plot(x3, type='l')
+
+Box.test(x1,lag=52)
+#On voit que la valeur de la statistique est en dessous du seuil (0,05) donc on rejette l'hypothèse "bruit blanc".
+acf(x1,lag.max=52,type=c("correlation"))
+
+
+```
+
+## Fonction *decompose* : moyennes mobiles
+
+```{r}
+budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=52)
+budapest_dec <- decompose(budapest.ts, type = "additive")
+
+plot(budapest_dec)
+```
+
+
+
+```{r}
+temp.ts <- ts(budapest$nb, start=c(2005,03,01), frequency=52)
+mod_stl_add <- stl(temp.ts, s.window = "periodic")
+
+donnee <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
+
+donnee %>% ggplot() + 
+  geom_line(aes(x = date, y=nb, color="Xt")) +
+  geom_line(aes(x=date, y=trend+seasonal, color="mt+st")) + geom_line(aes(x=date, y=trend, color="mt")) +
+  scale_color_manual(values = c("red", "purple", "black")) +
+  theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
+  labs(colour = "Modele") + ggtitle("stl() modèle additif") +
+  xlab("Temps") + ylab("Temperature") + 
+  theme(
+    legend.background = element_rect(fill = "darkgray"),
+    legend.text = element_text(size = 13) #+ theme_economist()
+  )
+
+donnee %>% ggplot() + aes(x=date, remainder) + geom_line() +  xlab("") + ylab("") + ggtitle("Résidus du modèle")
+
+
+
+
+```
+
+## DETECTION MA(q), AR(p) ?
+
+```{r}
+arima <- auto.arima(donnee$remainder)
+
+data <- donnee %>% mutate(res2 = arima$residuals)
+
+data %>% ggplot() + aes(x=date,y=res2) + geom_line()
+```
+
+
+## INTERPRETATION
+
+```{r}
+checkresiduals(arima, lag.max=20)
+```
+
+## STATISTIQUES DESCRIPTIVES
+```{r}
+mean(data$res2)
+
+var(data$res2)
+```
+
+
+## ACF ET PACF
+```{r}
+ggAcf(data$res2)
+
+gglagplot(data$res2, do.lines = FALSE, set.lags = 1:20, colour = FALSE)
+
+data %>% ggplot() + aes(x=res2) + geom_density()
+
+ggPacf(data$res2)
+```
+
+On remarque que l'ACF et la PACF sont similaires, ce qui reflète une absence d'effet résiduel.
+
+
+## Test de BOX PIERCE 
+```{r}
+Box.test(data$res2, lag = 20, type = "Box-Pierce", fitdf = 2)
+Box.test(data$res2, lag = 20, type = "Ljung-Box", fitdf = 2)
+```
+Les 2 test de Box-Pierce et de Box-Ljung, renvoie une p-value > 5 %, alors on ne rejette pas l'hypothèse HO. Les résidus  sont décoréllés.
