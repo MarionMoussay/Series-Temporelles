@@ -14,20 +14,20 @@ output:
 # Synthèse
 
 Notre étude porte sur le nombre de cas de varicelle à Budapest sur une période de 10 ans (2005 - 2015). 
-Dans un premier temps nous avons analysé la série brute, dans laquelle nous avons remarquer une saisonnalité de 52 semaines soit 1 an. 
+Dans un premier temps nous avons analysé la série brute, dans laquelle nous avons remarqué une saisonnalité de 52 semaines soit 1 an. 
 
 <center>
 <img src="export.png" alt="série brute" />
 </center>
 
 Après avoir retiré la saisonnalité et la tendance, nous avons étudié les résidus. Les résidus suivent un bruit blanc, nous observons toujours des corrélations dans notre ACF donc nous avons réalisé un AR(4). 
-On observe ici la décompisition de notre série.
+On observe ici la décomposition de notre série.
 
 <center>
 <img src="export2.png" alt="Décomposition de la série" />
 </center>
 
-Pour finir nous obtenons donc ce modèle :
+Pour finir, nous obtenons donc ce modèle :
 
 $$X_{t} = \hat m_{t}+ \hat s_{t}+ n_{t} + BB(\sigma^{2}= 1675)$$
 
@@ -42,7 +42,7 @@ La varicelle est une maladie infantile extrêmenment contagieuse, elle est respo
 
 Dans ce projet nous avons pour objectif de déployer les outils vus en cours pour essayer d'ajuster un modèle aux données.
 
-Dans un premier temps nous allons analyser notre série brutes puis nous allons déceller ou non une saisonnalité et une tendance, puis nous étudierons les résidus afin de créer un modèle qui s'ajuste à nos données.
+Dans un premier temps nous allons analyser notre série brute, puis nous allons déceller ou non une saisonnalité et une tendance, puis nous étudierons les résidus afin de créer un modèle qui s'ajuste à nos données.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 library(zoo)
@@ -63,7 +63,7 @@ data$Date <- dmy(data$Date)
 mean(colMeans(data[-1]))
 colMeans(data[-1]) 
 ```
-La moyenne générale des nombres cas de varicelles est de 38.84 de toutes les villes du jeu de données. La moyenne de Budapest est trois fois supérieure à la moyenne générale, ce qui semble tout à fait logique puisque c'est juste une question de proportion d'habitants par ville.
+La moyenne générale des nombres de cas de varicelles est de 38.84 parmi toutes les villes du jeu de données. La moyenne de Budapest est trois fois supérieure à la moyenne générale, ce qui semble tout à fait logique puisque c'est juste une question de proportion d'habitants par ville.
 
 ```{r}
 budapest <- data[,1:2]
@@ -195,7 +195,7 @@ Les résidus ne semblent pas corrélés, les nuages de points aux différents la
 Box.test(data$res2, lag = 20, type = "Box-Pierce", fitdf = 2)
 Box.test(data$res2, lag = 20, type = "Ljung-Box", fitdf = 2)
 ```
-Les 2 test de Box-Pierce et de Box-Ljung, renvoie une p-value > 5 %, alors on ne rejette pas l'hypothèse HO selon laquelle les auto-corrélations sont nulles. Les résidus  sont décoréllés.
+Les 2 test de Box-Pierce et de Box-Ljung, renvoie une **p-value > 5 %**, alors on ne rejette pas l'hypothèse HO selon laquelle les auto-corrélations sont nulles. Les résidus  sont décoréllés.
 
 L'estimateur de la moyenne nous indique bien que les résidus sont centrés. De plus, l'estimateur de la variance nous montre une valeur de sigma étant de 1675.
 
