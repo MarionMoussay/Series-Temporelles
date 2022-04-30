@@ -2,10 +2,39 @@
 title: "Projet"
 author: "Justine LOUARN - Lucie Raimbault - Marion Moussay"
 date: "4/29/2022"
-output: 
+output:
+  html_document:
+    toc: yes
+    df_print: paged
   pdf_document:
-    toc : true
+    toc: yes
 ---
+
+
+# Synthèse
+
+Notre étude porte sur le nombre de cas de varicelle à Budapest sur une période de 10 ans (2005 - 2015). 
+Dans un premier temps nous avons analysé la série brute, dans laquelle nous avons remarquer une saisonnalité de 52 semaines soit 1 an. 
+
+<center>
+<img src="export.png" alt="série brute" />
+</center>
+
+Après avoir retiré la saisonnalité et la tendance, nous avons étudié les résidus. Les résidus suivent un bruit blanc, nous observons toujours des corrélations dans notre ACF donc nous avons réalisé un AR(4). 
+On observe ici la décompisition de notre série.
+
+<center>
+<img src="export2.png" alt="Décomposition de la série" />
+</center>
+
+Pour finir nous obtenons donc ce modèle :
+
+$$X_{t} = \hat m_{t}+ \hat s_{t}+ n_{t} + BB(\sigma^{2}= 1675)$$
+
+$$n_{t} = \hat{a}_{1} n_{t-1}+ \hat{a}_{2} n_{t-2} + \hat{a}_{3} n_{t-3} + \hat{a}_{4} n_{t-4}$$
+
+
+
 
 # Introduction 
 
@@ -23,6 +52,7 @@ library(dplyr)
 library(lubridate)
 library(forecast)
 library(gridExtra)
+#library(png)
 ```
 
 ## Importation des données 
@@ -56,6 +86,7 @@ budapest %>% select(nb) %>%
     plot.type = "scatter", 
     lag.max=100
     )
+#dev.print(device = png, file = "export.png", width = 600)
 ```
 Pour mieux déterminer la saisonnalité nous allons observer la fonction d'autocorrélation. Elle semble périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
 
@@ -95,6 +126,7 @@ budapest_decomp %>% ggplot() +
   theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
   labs(colour = "Modele") + ggtitle("Modèle additif") +
   xlab("Années") + ylab("Nombre de cas de varicelles") + theme_minimal()
+
 ```
 # Elimination de la saisonnalité
 
@@ -117,6 +149,7 @@ donnee %>% ggplot() +
     legend.background = element_rect(fill = "darkgray"),
     legend.text = element_text(size = 13) #+ theme_economist()
   )
+
 ```
 ```{r}
 donnee %>% ggplot() + aes(x=date, remainder) + geom_line() +  xlab("") + ylab("") + ggtitle("Résidus du modèle")
@@ -205,6 +238,7 @@ budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=
 budapest_dec <- decompose(budapest.ts, type = "additive")
 
 plot(budapest_dec)
+#dev.print(device = png, file = "export2.png", width = 600)
 ```
 
 ## ii. Méthode des différences
