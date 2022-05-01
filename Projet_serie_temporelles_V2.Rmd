@@ -1,0 +1,267 @@
+---
+title: "Projet"
+author: "Justine LOUARN - Lucie Raimbault - Marion Moussay"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+---
+# Synthèse 
+La varicelle est une maladie infantile extrêmement contagieuse, elle est responsable d'une éruption de boutons. Elle guérit en une dizaine de jours. Dans cette étude nous allons nous intéresser au nombre de cas hebdomadaires de varicelle en Hongrie de 2005 à 2015. Nous avons choisis de nous intéresser seulement à la ville de Budapest, capitale et plus grande ville de Hongrie (1 752 286 habitants).
+
+Dans ce projet nous avons pour objectif de déployer les outils vus en cours pour essayer d'ajuster un modèle aux données.
+
+Dans un premier temps nous allons analyser notre série brute, puis nous allons déceller ou non une saisonnalité et une tendance, puis nous étudierons les résidus afin de créer un modèle qui s'ajuste à nos données.
+
+La série brute est représentée sur la figure 1. On y décèle une saisonnalité d'un an en revanche aucune tendance ne ressort. L'ACF permet de confirmer la saisonnalité puisqu'elle indique une période de 52 semaines soit 1 an.
+
+![Série brute](export.png)
+
+Après avoir retiré la saisonnalité, nous avons montré que les résidus étaient des bruits blancs. On peut observer la décomposition de la série sur la figure 2. 
+
+![Série brute](export2.png)
+
+De ce fait, nous pouvions nous lancer sur la modélisation de la série. Après observations du lag où s'annulaient l'ACF et la PACF, nous avons testés trois modèles : un AR(4), un MA(9) et un ARMA(4,9). Le modèle retenu sera l'AR(4) et après l'étude de celui-ci nous concluons sur le modèle :
+
+
+$$X_{t} = \hat m_{t}+ \hat s_{t}+ n_{t} + BB(\sigma^{2}= 1675)$$
+
+avec l'AR(4) qu'on détaille comme : 
+
+$$n_{t} = \hat{a}_{1} n_{t-1}+ \hat{a}_{2} n_{t-2} + \hat{a}_{3} n_{t-3} + \hat{a}_{4} n_{t-4}$$
+
+# Introduction 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(zoo)
+library(xts)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(forecast)
+library(gridExtra)
+library(png)
+```
+
+## Importation des données 
+
+```{r}
+data <- read.csv("hungary_chickenpox.csv")
+data$Date <- dmy(data$Date)
+mean(colMeans(data[-1]))
+colMeans(data[-1]) 
+```
+La moyenne générale des nombres de cas de varicelles est de 38.84 parmi toutes les villes du jeu de données. La moyenne de Budapest est trois fois supérieure à la moyenne générale, ce qui semble tout à fait logique puisque c'est juste une question de proportion d'habitants par ville.
+
+```{r fig.align='center', fig.width=6, fig.height=3}
+budapest <- data[,1:2]
+colnames(budapest) <- c("date", "nb")
+budapest %>% ggplot() + aes(x=date, y=nb) + geom_line() + ggtitle("Nombre de cas hebdomadaires de varicelles à Budapest")+theme_minimal()+ xlab("Date")+ylab("Nombre de cas")
+```
+De cette première représentation, nous remarquons directement une forte saisonnalité d'un an, soit 52 semaines dans notre cas. Nous n'observons pas vraiment de tendance ou alors une légère décroissance mais cela reste difficile à dire avec ce graphique. De plus, on imagine un modèle additif puisque l'on voit une amplitude plutot constante.
+```{r fig.align='center', fig.width=5, fig.height=4}
+boxplot(budapest$nb, main="Boxplot cas de varicelle à Budapest")
+```
+Sur le boxplot des données hebdomadaires de varicelles à Budapest, on observe qu'il y a des données hautes, après vérification on ne les considère pas comme abbérantes. Les données étant très propre, nous n'avons pas eu de modifications à faire sur le jeu de données. 
+
+
+
+## Première approche
+
+```{r fig.align='center', fig.width=7, fig.height=5}
+budapest %>% select(nb) %>% 
+  ggtsdisplay(
+    plot.type = "scatter", 
+    lag.max=100
+    )
+```
+
+
+```{r include=FALSE, eval=FALSE}
+dev.print(device = png, file = "export.png", width = 600)
+```
+Pour mieux déterminer la saisonnalité nous allons observer la fonction d'autocorrélation. Elle semble périodique, ce qui indique une périodicité dans la série temporelle. La ligne pointillée bleue indique le niveau en-dessous duquel la corrélation n'est plus statistiquement significative. 
+
+Le nuage de point permet de visualiser l'auto-corrélation d'ordre 1, soit le quotient des covariances empiriques par la variance empirique. Plus le nuage de points est arrondis plus l'auto-corrélation est proche de 1. Ici on ne distingue rien de "remarquable".
+
+Observons l'auto-corrélation de plus près  : 
+
+```{r fig.align='center', fig.width=6, fig.height=4}
+acf(budapest$nb, lag.max = 60)
+```
+
+On voit ici que la périodicité est de 52 semaines. En effet chaque donnée est espacée de 7 jours. **T= 52** semaines donc environ 12 mois, soit 1 an.
+
+On regarde l'évolution pour chaque année. 
+
+```{r message=FALSE, warning=FALSE, fig.align='center', fig.width=6, fig.height=4}
+budapest$annee<-factor(year(budapest$date))
+budapest$semaine<-week(budapest$date)
+
+
+ggplot(budapest,aes(x = semaine, y = nb,group=annee,colour=annee)) + geom_line()+scale_color_brewer(palette="Paired")+ ggtitle("Nombre de cas sur 52 semaines de varicelles à Budapest")+theme_minimal()+ xlab("semaine")+ylab("Nombre de cas")+ scale_fill_discrete(name = "Année")
+```
+Avec cette représentation on observe bien la saisonnalité, le même schéma se reproduit tous les ans. On remarque qu'il y a plus de cas de varicelle au début de l'année (en hiver et au printemps). Durant l'été, il y a peu de cas de varicelles, puis à la fin de l'année le nombre de cas de varicelle augmente. Cela semble logique, d'après santé publique france, la varicelle est une maladie saisonnière, on observe chaque année une hausse des cas au printemps. Il s'agit d'une augmentation attendue de la maladie.
+
+## Décomposition de la série 
+
+```{r fig.align='center', fig.width=6, fig.height=3}
+temp.ts <- ts(budapest$nb, start=c(2005,1,3), frequency=52)
+mod_stl_add <- stl(temp.ts, s.window = "periodic")
+
+budapest_decomp <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
+
+budapest_decomp %>% ggplot() + 
+  geom_line(aes(x = date, y=nb, color="Xt")) +
+  geom_line(aes(x=date, y=trend+seasonal, color="mt+st")) + geom_line(aes(x=date, y=trend, color="mt")) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
+  labs(colour = "Modele") + ggtitle("Modèle additif") +
+  xlab("Années") + ylab("Nombre de cas de varicelles") + theme_minimal()
+
+```
+# Elimination de la saisonnalité
+
+Puisqu'on a conclut qu'il n'y avait pas de tendance apparente, on utilise une différence de 1 uniquement dans un premier temps puis on inclut le lag en plus dans un second temps. On utilise la fonction *stl()* mais on aurait pu utiliser la méthode des différences ou la fonction *décompose* qui utilise le principe des moyennes mobiles. Ces deux méthodes sont illustrées dans l'annexe (i) et (ii).
+
+```{r fig.align='center', fig.width=6, fig.height=3}
+temp.ts <- ts(budapest$nb, start=c(2005,03,01), frequency=52)
+mod_stl_add <- stl(temp.ts, s.window = "periodic")
+
+budapest_stl <- cbind(budapest,as.data.frame(mod_stl_add$time.series))
+
+budapest_stl %>% ggplot() + 
+  geom_line(aes(x = date, y=nb, color="Xt")) +
+  geom_line(aes(x=date, y=trend+seasonal, color="mt+st")) + geom_line(aes(x=date, y=trend, color="mt")) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme(legend.position = c(0.8, 0.08), legend.direction = "horizontal") +
+  labs(colour = "Modele") + ggtitle("Décomposition du modèle additif") +
+  xlab("Temps") + ylab("Nombre de cas") + 
+  theme_minimal()
+
+```
+```{r fig.align='center', fig.width=6, fig.height=3}
+budapest_stl %>% ggplot() + aes(x=date, remainder) + geom_line() +  xlab("") + ylab("") + ggtitle("Résidus du modèle")
+```
+Les résidus sont bien centrés en 0.
+
+```{r fig.align='center', fig.width=7, fig.height=5}
+p1 <- gglagplot(budapest_stl$remainder, do.lines = FALSE, set.lags = 1:12, colour = FALSE)
+p2 <- ggAcf(budapest_stl$remainder, lag.max = 15) + ggtitle(" ")
+p3 <- ggPacf(budapest_stl$remainder, lag.max = 15) +  ggtitle(" ")
+
+grid.arrange(top = "Etude des résidus", p2,p3, p1, layout_matrix = rbind(c(1,3),c(2,3)))
+```
+Sur la PACF, on observe une auto-corrélation nulle au lag 4. On choisirerait un processus auto-régressif de paramètre p=4 : *AR(4)*. 
+L'ACF nous montre une corrélation qui s'annule au lag 9 donc on testera aussi un processus MA(9). Par complémentarité, on testera aussi un modèle ARMA(4,9).
+
+# Modélisation par des processus et choix du modèle
+## AR(4)
+```{r}
+AR <- Arima(budapest_stl$remainder, c(4,0,0))
+budapest_ar4 <- budapest_stl %>% mutate(res = AR$residuals)
+```
+
+## MA(9)
+```{r}
+MA <- Arima(budapest_stl$remainder, c(0,0,9))
+budapest_ma9 <- budapest_stl %>% mutate(res = MA$residuals)
+```
+
+## ARMA(4,9)
+```{r}
+ARMA <- Arima(budapest_stl$remainder, c(4,0,9))
+budapest_arma49 <- budapest_stl %>% mutate(res = ARMA$residuals)
+```
+
+## Comparaison des modèles 
+```{r}
+c(BIC(AR), BIC(MA), BIC(ARMA))
+```
+On voit que le BIC de du processus auto-régressif est plus petit donc on le privilégie. De plus, la fonction *auto.arima()* nous permet de conforter notre choix. Elle est disponible en annexe iii.
+
+# Analyse des résidus
+```{r fig.align='center', fig.width=7, fig.height=5}
+checkresiduals(AR, lag.max=20)
+```
+On ne perçoit pas de struture particulière sur l'ACF, de plus la densité des résidus semblent être gaussiennes.
+
+```{r fig.align='center', fig.width=6, fig.height=5}
+gglagplot(AR$residuals, do.lines = FALSE, set.lags = 1:12, colour = FALSE)
+```
+Les résidus ne semblent pas corrélés, les nuages de points aux différents lags sont plutôt arrondis.
+
+```{r}
+Box.test(budapest_ar4$res, lag = 20, type = "Box-Pierce", fitdf = 2)
+Box.test(budapest_ar4$res, lag = 20, type = "Ljung-Box", fitdf = 2)
+```
+Les 2 test de Box-Pierce et de Box-Ljung, renvoie une **p-value > 5 %**, alors on ne rejette pas l'hypothèse HO selon laquelle les auto-corrélations sont nulles. Les résidus sont donc décoréllés.
+
+L'estimateur de la moyenne nous indique bien que les résidus sont centrés. De plus, l'estimateur de la variance nous montre une valeur de sigma carré étant de 1675.
+
+```{r}
+mean(AR$residuals)
+var(AR$residuals)
+```
+
+# Modèle de régression avec la décomposition de Fourrier
+```{r fig.align='center', fig.width=7, fig.height=3}
+
+t <- 1:nrow(budapest)
+st <- t%o%c(rep(1:182,2))*pi/182
+st[,1:182] <- cos(st[,1:182])
+st[,183:364] <- sin(st[,183:364])
+names(st) <- c(paste("cos",1:182),paste("sin",1:182))
+df <- data.frame(st, t, x=budapest$nb)
+
+mod <- lm(data = df, x~. )
+
+plot(budapest$nb,xlab='Temps',ylab="Nombre de cas de varicelle",main='Modèle de régression avec la décomposition de Fourrier', type = "l")
+points(mod$fitted.values, type='l',col='red')
+legend('topright',c(expression(X[t]),expression(m[t]+s[t]+e[t])),col=c(1,"red"),lty=1)
+```
+On voit alors que le modèle que nous avons construit est en totale adéquation avec les données que nous avons.
+
+# Conclusion 
+
+Nous avons un modèle additif et un modèle AR(4) sur nos résidus.
+
+$$X_{t} = \hat m_{t}+ \hat s_{t}+ n_{t} + BB(\sigma^{2}= 1675)$$
+$$n_{t} = \hat{a}_{1} n_{t-1}+ \hat{a}_{2} n_{t-2} + \hat{a}_{3} n_{t-3} + \hat{a}_{4} n_{t-4}$$ un AR(4).
+
+
+# Annexe 
+## i. Fonction *decompose* : moyennes mobiles
+
+```{r fig.align='center', fig.width=7, fig.height=5}
+budapest.ts <- ts(budapest$nb, start=c(2005,1,3),end =c(2014,12,29),  frequency=52)
+budapest_dec <- decompose(budapest.ts, type = "additive")
+
+plot(budapest_dec)
+```
+
+```{r include=FALSE, eval = FALSE}
+dev.print(device = png, file = "export2.png", width = 600)
+```
+
+## ii. Méthode des différences
+```{r fig.align='center', fig.width=7, fig.height=5}
+T=52
+
+xt_diff = diff(budapest$nb, differences = 1)
+xt_diff_lag = diff(diff(budapest$nb, differences = 1), lag = T)
+
+p1 <- budapest_stl %>% ggplot() + aes(x=date, y=nb) + geom_line() +  xlab("") + ylab("Nombre de cas de varicelle")
+p2 <- ggplot() + aes(x=1:521, y=xt_diff) + geom_line() + xlab("") + ylab(" ") + ggtitle("diff 1")
+p3 <- ggplot() + aes(x= 1:469, y=xt_diff_lag) + geom_line() +  xlab("") + ylab(" ") + ggtitle("diff 1 et lag 52")
+
+grid.arrange( top = "Représentations du modèle issues de la mèthode des différences", p1, p2, p3, layout_matrix = rbind(c(1,1),c(2,3)))
+```
+
+## iii. auto.arima() 
+```{r fig.align='center', fig.width=7, fig.height=5}
+arima <- auto.arima(budapest_stl$remainder)
+checkresiduals(arima, lag.max=20)
+```
